@@ -84,7 +84,7 @@ _DEFAULT_PROFILE = {
     "home_address": "",
     "work_address": "",
     "saved_locations": {"home": None, "work": None, "gym": None},
-    "default_city": "Brisbane",
+    "default_city": "Manila",
     "preferences": {
         "tts_voice": "en-AU-NatashaNeural",
         "response_style": "friendly",

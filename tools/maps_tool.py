@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 logger = logging.getLogger(__name__)
 
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
-DEFAULT_CITY = os.environ.get("OPENWEATHER_DEFAULT_CITY", "Brisbane")
+DEFAULT_CITY = os.environ.get("OPENWEATHER_DEFAULT_CITY", "Manila")
 
 _gmaps_client = None
 

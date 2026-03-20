@@ -253,7 +253,7 @@ class RoadMateAgent:
     def _handle_weather(self, transcript: str):
         """Follows handle_weather_query.md workflow."""
         driving = driving_mode_tool.is_driving_mode_active()
-        city = self.profile.get("default_city", "Brisbane")
+        city = self.profile.get("default_city", "Manila")
 
         try:
             data = weather_tool.get_current_weather(city)
@@ -288,7 +288,7 @@ class RoadMateAgent:
             dest_response = self._listen()
             destination = extract_destination(dest_response, saved) or dest_response
 
-        origin = self.profile.get("default_city", "Brisbane")
+        origin = self.profile.get("default_city", "Manila")
 
         try:
             data = maps_tool.get_travel_time(origin, destination)

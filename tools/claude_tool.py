@@ -157,7 +157,7 @@ if __name__ == "__main__":
 
     profile = {
         "name": "Jess",
-        "default_city": "Brisbane",
+        "default_city": "Manila",
         "goals": ["Drive safely", "Stay focused"],
         "routines": {"morning": "Drive to work"},
         "interests": ["technology", "fitness"],
