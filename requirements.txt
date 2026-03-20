@@ -1,0 +1,38 @@
+# ============================================================
+# RoadMate AI — Python Dependencies
+# ============================================================
+# Install all: pip install -r requirements.txt
+#
+# NOTE: pyaudio requires Microsoft C++ Build Tools on Windows.
+# If pip install pyaudio fails, try:
+#   pip install pipwin
+#   pipwin install pyaudio
+# ============================================================
+
+# --- Core AI ---
+anthropic>=0.25.0
+
+# --- Environment ---
+python-dotenv>=1.0.0
+
+# --- Speech Recognition ---
+SpeechRecognition>=3.10.0
+pyaudio>=0.2.14
+vosk>=0.3.45
+
+# --- Text-to-Speech ---
+edge-tts>=6.1.9
+pyttsx3>=2.90
+
+# --- Audio Playback (for edge-tts output) ---
+pygame>=2.5.0
+
+# --- APIs ---
+requests>=2.31.0
+googlemaps>=4.10.0
+spotipy>=2.22.1
+
+# --- Web Server ---
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9

@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="RoadMate" />
+  <meta name="theme-color" content="#080a10" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>RoadMate AI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #080a10;
+      --surface:   #0d1018;
+      --border:    rgba(0,229,255,0.12);
+      --cyan:      #00e5ff;
+      --cyan-dim:  rgba(0,229,255,0.15);
+      --cyan-glow: rgba(0,229,255,0.4);
+      --purple:    #7c3aed;
+      --green:     #34d399;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+    }
+
+    html, body {
+      height: 100%; width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', sans-serif;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0,229,255,0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 20% 110%, rgba(124,58,237,0.06) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    #app {
+      position: relative; z-index: 1;
+      height: 100dvh;
+      display: flex; flex-direction: column;
+      align-items: center;
+      padding: env(safe-area-inset-top, 12px) 20px env(safe-area-inset-bottom, 20px);
+    }
+
+    /* ── Status bar ── */
+    #statusbar {
+      width: 100%;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 4px 6px; flex-shrink: 0;
+    }
+    #clock {
+      font-family: 'Orbitron', monospace;
+      font-size: 13px; font-weight: 700;
+      color: var(--cyan); letter-spacing: 0.1em;
+    }
+    #bt-badge {
+      display: flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--cyan-dim);
+      font-size: 11px; font-weight: 500; color: var(--cyan);
+      letter-spacing: 0.05em;
+    }
+    #bt-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 6px var(--cyan);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    #mode-badge { font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: 0.05em; }
+
+    /* ── Logo ── */
+    #logo-area {
+      display: flex; flex-direction: column; align-items: center;
+      margin-top: 8px; flex-shrink: 0;
+    }
+    #orbit-ring {
+      position: relative; width: 110px; height: 110px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 10px;
+    }
+    #orbit-ring::before, #orbit-ring::after {
+      content: ''; position: absolute; inset: 0;
+      border-radius: 50%; border: 1px solid transparent;
+    }
+    #orbit-ring::before {
+      border-top-color: var(--cyan); border-right-color: rgba(0,229,255,0.3);
+      animation: orbit 3s linear infinite;
+    }
+    #orbit-ring::after {
+      border-bottom-color: var(--purple); border-left-color: rgba(124,58,237,0.3);
+      animation: orbit 5s linear infinite reverse; inset: 8px;
+    }
+    #logo-icon {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, rgba(0,229,255,0.15), rgba(0,229,255,0.03));
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center; font-size: 32px;
+      box-shadow: 0 0 30px rgba(0,229,255,0.1), inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+    #brand {
+      font-family: 'Orbitron', monospace; font-size: 22px; font-weight: 900;
+      letter-spacing: 0.25em; color: var(--text);
+      text-shadow: 0 0 20px rgba(0,229,255,0.5);
+    }
+    #brand span { color: var(--cyan); }
+    #tagline { font-size: 11px; color: var(--muted); letter-spacing: 0.2em; text-transform: uppercase; margin-top: 3px; }
+
+    /* ── Response card ── */
+    #response-area { flex: 1; width: 100%; display: flex; flex-direction: column; justify-content: center; padding: 12px 0; min-height: 0; }
+    #response-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 18px 20px;
+      min-height: 80px; max-height: 100%; overflow-y: auto;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03);
+      transition: border-color 0.3s cubic-bezier(0.22,1,0.36,1);
+    }
+    #response-card.active { border-color: rgba(0,229,255,0.35); }
+    #response-label { font-size: 10px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--cyan); margin-bottom: 8px; opacity: 0.7; }
+    #response-text { font-size: 15px; line-height: 1.65; color: var(--text); }
+    #response-text.placeholder { color: var(--muted); font-style: italic; }
+
+    /* ── Waveform ── */
+    #waveform { display: flex; align-items: center; justify-content: center; gap: 3px; height: 28px; margin-top: 10px; opacity: 0; transition: opacity 0.3s cubic-bezier(0.22,1,0.36,1); }
+    #waveform.visible { opacity: 1; }
+    .bar { width: 3px; border-radius: 2px; background: var(--cyan); transform-origin: bottom; }
+    .bar:nth-child(1)  { animation: wave 0.9s ease-in-out infinite 0.0s;  height: 10px; }
+    .bar:nth-child(2)  { animation: wave 0.9s ease-in-out infinite 0.1s;  height: 18px; }
+    .bar:nth-child(3)  { animation: wave 0.9s ease-in-out infinite 0.2s;  height: 24px; }
+    .bar:nth-child(4)  { animation: wave 0.9s ease-in-out infinite 0.3s;  height: 28px; }
+    .bar:nth-child(5)  { animation: wave 0.9s ease-in-out infinite 0.15s; height: 20px; }
+    .bar:nth-child(6)  { animation: wave 0.9s ease-in-out infinite 0.25s; height: 26px; }
+    .bar:nth-child(7)  { animation: wave 0.9s ease-in-out infinite 0.35s; height: 16px; }
+    .bar:nth-child(8)  { animation: wave 0.9s ease-in-out infinite 0.05s; height: 12px; }
+    .bar:nth-child(9)  { animation: wave 0.9s ease-in-out infinite 0.2s;  height: 22px; }
+    .bar:nth-child(10) { animation: wave 0.9s ease-in-out infinite 0.1s;  height: 8px;  }
+
+    /* ── Status line ── */
+    #status-line {
+      text-align: center; font-size: 12px; font-weight: 500;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--muted); height: 18px; flex-shrink: 0; margin: 6px 0;
+      transition: color 0.3s cubic-bezier(0.22,1,0.36,1);
+    }
+    #status-line.standby  { color: var(--green); }
+    #status-line.command  { color: var(--cyan); }
+    #status-line.processing { color: var(--purple); }
+    #status-line.speaking { color: var(--green); }
+
+    /* ── Mic button ── */
+    #mic-wrap { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-bottom: 4px; }
+    #mic-btn {
+      width: 88px; height: 88px; border-radius: 50%;
+      border: 2px solid rgba(0,229,255,0.4);
+      background: radial-gradient(circle at 40% 35%, rgba(0,229,255,0.12), rgba(0,229,255,0.03));
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; position: relative;
+      box-shadow: 0 0 0 0 rgba(0,229,255,0.3), 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+      transition: border-color 0.25s cubic-bezier(0.22,1,0.36,1), box-shadow 0.25s cubic-bezier(0.22,1,0.36,1), transform 0.15s cubic-bezier(0.22,1,0.36,1);
+      -webkit-user-select: none; user-select: none;
+    }
+    #mic-btn:active { transform: scale(0.94); }
+
+    /* Standby — soft breathing glow, always on */
+    #mic-btn.standby {
+      border-color: rgba(52,211,153,0.5);
+      animation: breathe 3s ease-in-out infinite;
+    }
+    /* Wake detected — strong cyan pulse */
+    #mic-btn.command {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 14px rgba(0,229,255,0.08), 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+      animation: mic-pulse 1.2s ease-in-out infinite;
+    }
+    /* Processing */
+    #mic-btn.processing {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 8px rgba(124,58,237,0.1), 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    #mic-icon { font-size: 32px; transition: transform 0.15s cubic-bezier(0.22,1,0.36,1); pointer-events: none; }
+    #mic-hint { font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; text-align: center; }
+
+    /* ── Wake word tip ── */
+    #wake-tip {
+      font-size: 11px; color: rgba(0,229,255,0.5);
+      letter-spacing: 0.08em; text-align: center;
+      margin-top: -4px; flex-shrink: 0;
+    }
+
+    /* ── Quick chips ── */
+    #quick-wrap { width: 100%; flex-shrink: 0; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+    #quick-wrap::-webkit-scrollbar { display: none; }
+    #quick-chips { display: flex; gap: 8px; width: max-content; padding: 0 2px; }
+    .chip {
+      padding: 6px 14px; border-radius: 20px;
+      border: 1px solid var(--border); background: var(--surface);
+      font-size: 12px; font-weight: 500; color: var(--muted);
+      cursor: pointer; white-space: nowrap;
+      transition: color 0.2s cubic-bezier(0.22,1,0.36,1), border-color 0.2s cubic-bezier(0.22,1,0.36,1), background 0.2s cubic-bezier(0.22,1,0.36,1);
+      -webkit-user-select: none; user-select: none;
+    }
+    .chip:hover, .chip:active { color: var(--cyan); border-color: rgba(0,229,255,0.35); background: var(--cyan-dim); }
+
+    /* ── Spinner ── */
+    #spinner {
+      display: none; width: 18px; height: 18px;
+      border: 2px solid rgba(124,58,237,0.2); border-top-color: var(--purple);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    }
+    #mic-btn.processing #spinner { display: block; }
+    #mic-btn.processing #mic-icon { opacity: 0; }
+
+    /* ── Offline banner ── */
+    #offline-banner {
+      display: none; width: 100%;
+      background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 10px; padding: 8px 14px; margin-bottom: 6px;
+      font-size: 12px; color: #f87171; text-align: center; flex-shrink: 0;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+      background: rgba(239,68,68,0.9); color: #fff;
+      padding: 8px 18px; border-radius: 20px; font-size: 13px; font-weight: 500;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s cubic-bezier(0.22,1,0.36,1); z-index: 100;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── Keyframes ── */
+    @keyframes orbit {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes breathe {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0.0), 0 8px 32px rgba(0,0,0,0.5); }
+      50%       { box-shadow: 0 0 0 10px rgba(52,211,153,0.06), 0 8px 32px rgba(0,0,0,0.5); }
+    }
+    @keyframes mic-pulse {
+      0%, 100% { box-shadow: 0 0 0 14px rgba(0,229,255,0.08), 0 8px 32px rgba(0,0,0,0.5); }
+      50%       { box-shadow: 0 0 0 22px rgba(0,229,255,0.03), 0 8px 32px rgba(0,0,0,0.5); }
+    }
+    @keyframes wave {
+      0%, 100% { transform: scaleY(0.35); opacity: 0.5; }
+      50%       { transform: scaleY(1);    opacity: 1; }
+    }
+    @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+    @keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fade-in 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <div id="statusbar">
+    <div id="clock">--:-- --</div>
+    <div id="bt-badge"><div id="bt-dot"></div><span>HILUX BT</span></div>
+    <div id="mode-badge">NORMAL</div>
+  </div>
+
+  <div id="logo-area">
+    <div id="orbit-ring"><div id="logo-icon">🚗</div></div>
+    <div id="brand">ROAD<span>MATE</span></div>
+    <div id="tagline">Hilux AI Companion</div>
+  </div>
+
+  <div id="offline-banner">⚠ Cannot reach server — check connection</div>
+  <div id="unlock-banner" onclick="unlockAudio()" style="
+    width:100%; padding:10px 14px; border-radius:10px; margin-bottom:6px;
+    background:rgba(0,229,255,0.1); border:1px solid rgba(0,229,255,0.4);
+    font-size:13px; color:var(--cyan); text-align:center; cursor:pointer;
+    letter-spacing:0.05em; flex-shrink:0;
+  ">🔊 Tap here first to enable voice</div>
+
+  <div id="response-area">
+    <div id="response-card">
+      <div id="response-label">AI Response</div>
+      <div id="response-text" class="placeholder">Say "Hey RoadMate" to start...</div>
+      <div id="waveform">
+        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        <div class="bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="status-line">Starting...</div>
+
+  <div id="mic-wrap">
+    <button id="mic-btn" aria-label="Mic status">
+      <span id="mic-icon">🎙️</span>
+      <div id="spinner"></div>
+    </button>
+    <div id="mic-hint">Tap to speak manually</div>
+  </div>
+
+  <div id="wake-tip">"Hey RoadMate" · "Hi Hilux" · "Assistant"</div>
+
+  <div id="quick-wrap">
+    <div id="quick-chips">
+      <div class="chip" data-cmd="What's the weather?">Weather</div>
+      <div class="chip" data-cmd="Tell me a joke">Joke</div>
+      <div class="chip" data-cmd="Quiz me">Trivia</div>
+      <div class="chip" data-cmd="Roast me">Roast Me</div>
+      <div class="chip" data-cmd="Rap about my Hilux">Rap</div>
+      <div class="chip" data-cmd="Give me a riddle">Riddle</div>
+      <div class="chip" data-cmd="Give me a fun fact">Fun Fact</div>
+      <div class="chip" data-cmd="What time is it?">Time</div>
+      <div class="chip" data-cmd="Nearest gas station">Nearby</div>
+      <div class="chip" data-cmd="What are my reminders?">Reminders</div>
+    </div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+// ─── Config ──────────────────────────────────────────────────────────────────
+const API_BASE   = window.location.origin;
+const WAKE_WORDS = [
+  'hey roadmate', 'hi roadmate', 'roadmate',
+  'hi hilux', 'hey hilux', 'hilux',
+  'assistant', 'hey assistant',
+  'road mate', 'road made', 'hey road',
+  'hi lux', 'hey lux', 'hi looks', 'hey looks',
+  'ok roadmate', 'okay roadmate',
+];
+const SLEEP_PHRASES = ['go to sleep', 'stop listening', 'goodbye roadmate', 'bye roadmate', 'sleep mode'];
+
+// ─── State machine ───────────────────────────────────────────────────────────
+const S = { IDLE: 'idle', STANDBY: 'standby', COMMAND: 'command', PROCESSING: 'processing', SPEAKING: 'speaking' };
+let state        = S.IDLE;
+let drivingMode  = false;
+let wakeIdx      = -1;   // result index that contained the wake word (don't re-use as command)
+
+// ─── DOM ─────────────────────────────────────────────────────────────────────
+const micBtn       = document.getElementById('mic-btn');
+const micIcon      = document.getElementById('mic-icon');
+const statusLine   = document.getElementById('status-line');
+const responseText = document.getElementById('response-text');
+const responseCard = document.getElementById('response-card');
+const waveform     = document.getElementById('waveform');
+const modeBadge    = document.getElementById('mode-badge');
+const toast        = document.getElementById('toast');
+const offlineBanner= document.getElementById('offline-banner');
+
+// ─── Clock ───────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+updateClock(); setInterval(updateClock, 1000);
+
+// ─── Wake word check ─────────────────────────────────────────────────────────
+function containsWakeWord(text) {
+  const norm = text.toLowerCase().trim();
+  return WAKE_WORDS.some(w => norm.includes(w));
+}
+
+function stripWakeWord(text) {
+  let norm = text.toLowerCase().trim();
+  for (const w of WAKE_WORDS) {
+    const idx = norm.indexOf(w);
+    if (idx !== -1) {
+      // Return whatever comes after the wake word
+      const after = text.slice(idx + w.length).trim();
+      return after;
+    }
+  }
+  return text.trim();
+}
+
+// ─── Audio chime (Web Audio API — no file needed) ────────────────────────────
+function playChime() {
+  try {
+    const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(660, ctx.currentTime);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
+  } catch(e) {}
+}
+
+// ─── Audio unlock ─────────────────────────────────────────────────────────────
+let _audioUnlocked = false;
+let _currentAudio  = null;
+
+function unlockAudio() {
+  if (_audioUnlocked) return;
+  _audioUnlocked = true;
+  // Play a silent audio to satisfy the autoplay policy
+  const sil = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+  sil.volume = 0;
+  sil.play().catch(() => {});
+  // Hide the unlock banner
+  const banner = document.getElementById('unlock-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+// ─── TTS — edge-tts audio from server, fallback to Web Speech API ─────────────
+function speak(audioB64, fallbackText) {
+  stopSpeaking();
+
+  // Try the high-quality Natasha voice from server first
+  if (audioB64 && _audioUnlocked) {
+    return new Promise(resolve => {
+      const bytes = atob(audioB64);
+      const arr   = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      const blob  = new Blob([arr], { type: 'audio/mpeg' });
+      const url   = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      _currentAudio = audio;
+
+      audio.onplay  = () => { setState(S.SPEAKING); waveform.classList.add('visible'); };
+      audio.onended = () => { waveform.classList.remove('visible'); URL.revokeObjectURL(url); _currentAudio = null; resolve(); };
+      audio.onerror = () => { URL.revokeObjectURL(url); _currentAudio = null; speakFallback(fallbackText).then(resolve); };
+
+      audio.play().catch(() => {
+        // Autoplay blocked — fall back to browser voice
+        URL.revokeObjectURL(url); _currentAudio = null;
+        speakFallback(fallbackText).then(resolve);
+      });
+    });
+  }
+
+  // Fallback: browser Web Speech API (always allowed, no autoplay restriction)
+  return speakFallback(fallbackText);
+}
+
+function speakFallback(text) {
+  if (!text || !window.speechSynthesis) return Promise.resolve();
+  return new Promise(resolve => {
+    window.speechSynthesis.cancel();
+    const utt    = new SpeechSynthesisUtterance(text);
+    utt.rate     = 1.05; utt.pitch = 1.05; utt.volume = 1.0;
+    utt.lang     = 'en-AU';
+    const voices = window.speechSynthesis.getVoices();
+    const best   = voices.find(v =>
+      v.name.includes('Google UK English Female') ||
+      v.name.includes('Samantha') || v.name.includes('Karen') ||
+      v.name.includes('Moira')    || v.name.includes('Tessa') ||
+      (v.lang.startsWith('en') && v.name.toLowerCase().includes('female'))
+    );
+    if (best) utt.voice = best;
+    utt.onstart  = () => { setState(S.SPEAKING); waveform.classList.add('visible'); };
+    utt.onend    = () => { waveform.classList.remove('visible'); resolve(); };
+    utt.onerror  = () => { waveform.classList.remove('visible'); resolve(); };
+    window.speechSynthesis.speak(utt);
+  });
+}
+
+function stopSpeaking() {
+  if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; }
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  waveform.classList.remove('visible');
+}
+
+// ─── State management ─────────────────────────────────────────────────────────
+function setState(s) {
+  state = s;
+  micBtn.className = '';
+  statusLine.className = '';
+  statusLine.id = 'status-line';
+
+  if (s === S.STANDBY) {
+    micBtn.classList.add('standby');
+    statusLine.classList.add('standby');
+    statusLine.textContent = 'Always Listening...';
+    micIcon.style.opacity = '1';
+    responseCard.classList.remove('active');
+  } else if (s === S.COMMAND) {
+    micBtn.classList.add('command');
+    statusLine.classList.add('command');
+    statusLine.textContent = 'Listening for command...';
+    micIcon.style.opacity = '1';
+    responseCard.classList.add('active');
+  } else if (s === S.PROCESSING) {
+    micBtn.classList.add('processing');
+    statusLine.classList.add('processing');
+    statusLine.textContent = 'Processing...';
+    micIcon.style.opacity = '0';
+    responseCard.classList.add('active');
+  } else if (s === S.SPEAKING) {
+    micBtn.classList.add('standby');
+    statusLine.classList.add('speaking');
+    statusLine.textContent = 'Speaking...';
+    micIcon.style.opacity = '1';
+  } else if (s === S.IDLE) {
+    statusLine.textContent = 'Initialising...';
+  }
+}
+
+// ─── Speech recognition ──────────────────────────────────────────────────────
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+
+// safeStart declared here so sendMessage can call it after speaking finishes
+function safeStart() {
+  if (!recognition) return;
+  wakeIdx = -1;
+  try { recognition.start(); } catch(e) { /* already running — ignore */ }
+}
+
+if (!SpeechRecognition) {
+  statusLine.textContent = 'Voice not supported — use chips below';
+} else {
+  recognition = new SpeechRecognition();
+  recognition.continuous      = true;
+  recognition.interimResults  = true;
+  recognition.lang            = 'en-AU';
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    if (state === S.IDLE) setState(S.STANDBY);
+  };
+
+  recognition.onresult = (e) => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const transcript = e.results[i][0].transcript.trim();
+      const isFinal    = e.results[i].isFinal;
+
+      // ── STANDBY: watch for wake word ──────────────────────────────────────
+      if (state === S.STANDBY) {
+        if (containsWakeWord(transcript)) {
+          playChime();
+          wakeIdx = i;
+          setState(S.COMMAND);
+        }
+      }
+
+      // ── COMMAND: always listening — no timeout ────────────────────────────
+      if (state === S.COMMAND) {
+        const norm = transcript.toLowerCase().trim();
+
+        // Sleep phrases send RoadMate back to standby
+        if (isFinal && SLEEP_PHRASES.some(p => norm.includes(p))) {
+          setState(S.STANDBY);
+          return;
+        }
+
+        if (i === wakeIdx) {
+          // Same utterance as wake word — only send if command follows inline
+          if (isFinal) {
+            const inline = stripWakeWord(transcript);
+            if (inline.length > 2) sendMessage(inline);
+          }
+        } else {
+          // New utterance — this is the command
+          if (transcript) { responseText.textContent = transcript; responseText.classList.remove('placeholder'); }
+          if (isFinal && transcript.length > 1) sendMessage(transcript);
+        }
+      }
+    }
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'not-allowed') {
+      statusLine.textContent = 'Microphone access denied';
+      showToast('Allow microphone in browser settings');
+      return;
+    }
+    if (state !== S.PROCESSING && state !== S.SPEAKING) {
+      setTimeout(safeStart, 1000);
+    }
+  };
+
+  recognition.onend = () => {
+    // Restart whenever not mid-processing/speaking — sendMessage also calls safeStart
+    if (state !== S.PROCESSING && state !== S.SPEAKING) {
+      setTimeout(safeStart, 300);
+    }
+  };
+
+  // Manual mic tap
+  micBtn.addEventListener('click', () => {
+    unlockAudio();
+    if (state === S.PROCESSING) return;
+    stopSpeaking();
+
+    if (state === S.COMMAND) {
+      setState(S.STANDBY);
+      return;
+    }
+
+    playChime();
+    setState(S.COMMAND);
+  });
+
+  safeStart();
+}
+
+// ─── Send to API ─────────────────────────────────────────────────────────────
+async function sendMessage(text) {
+  if (!text || state === S.PROCESSING) return;
+  setState(S.PROCESSING);
+
+  try {
+    const res = await fetch(`${API_BASE}/api/chat`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ message: text }),
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    offlineBanner.style.display = 'none';
+
+    if (data.intent === 'driving_mode_on')  { drivingMode = true;  modeBadge.textContent = 'DRIVING'; }
+    if (data.intent === 'driving_mode_off') { drivingMode = false; modeBadge.textContent = 'NORMAL'; }
+
+    if (data.intent === 'timer') {
+      const secs = parseTimerDuration(text);
+      if (secs > 0) scheduleTimer(secs, text);
+    }
+
+    displayResponse(data.response);
+    await speak(data.audio, data.response);
+
+  } catch(err) {
+    offlineBanner.style.display = 'block';
+    displayResponse('Connection error. Check your internet.');
+    speakFallback('Connection error. Check your internet.');
+  }
+
+  // Stay in COMMAND so next sentence is immediately heard — no need to re-wake
+  setState(S.COMMAND);
+  safeStart();
+}
+
+// ─── Quick chips ─────────────────────────────────────────────────────────────
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    unlockAudio();
+    if (state === S.PROCESSING || state === S.SPEAKING) return;
+    stopSpeaking();
+    displayResponse(chip.dataset.cmd);
+    sendMessage(chip.dataset.cmd);
+  });
+});
+
+// Unlock on any tap anywhere on the page (catches wake-word-only users)
+document.addEventListener('click', unlockAudio, { once: true });
+document.addEventListener('touchstart', unlockAudio, { once: true });
+
+// ─── Timer (client-side) ─────────────────────────────────────────────────────
+function parseTimerDuration(text) {
+  let s = 0;
+  const n = text.toLowerCase();
+  const h   = n.match(/(\d+)\s*(?:hour|hours|hr|hrs)/);
+  const m   = n.match(/(\d+)\s*(?:minute|minutes|min|mins)/);
+  const sec = n.match(/(\d+)\s*(?:second|seconds|sec|secs)/);
+  if (h)             s += parseInt(h[1]) * 3600;
+  if (m)             s += parseInt(m[1]) * 60;
+  if (sec && s === 0) s += parseInt(sec[1]);
+  return s;
+}
+
+function scheduleTimer(seconds, originalText) {
+  setTimeout(async () => {
+    const msg = "Hey Jess! Your timer is done!";
+    displayResponse(msg);
+    setState(S.SPEAKING);
+    await speak(null, msg);
+    setState(S.STANDBY);
+    if (Notification.permission === 'granted') {
+      new Notification('RoadMate', { body: "Timer's up!" });
+    }
+  }, seconds * 1000);
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function displayResponse(text) {
+  responseText.textContent = text;
+  responseText.classList.remove('placeholder');
+  responseText.classList.add('fade-in');
+  setTimeout(() => responseText.classList.remove('fade-in'), 500);
+}
+
+function showToast(msg) {
+  toast.textContent = msg; toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// ─── Status fetch ─────────────────────────────────────────────────────────────
+fetch(`${API_BASE}/api/status`).then(r => r.json()).then(d => {
+  drivingMode = d.driving_mode;
+  modeBadge.textContent = drivingMode ? 'DRIVING' : 'NORMAL';
+}).catch(() => { offlineBanner.style.display = 'block'; });
+
+// ─── Wake lock ────────────────────────────────────────────────────────────────
+async function requestWakeLock() {
+  if ('wakeLock' in navigator) {
+    try { await navigator.wakeLock.request('screen'); } catch(e) {}
+  }
+}
+requestWakeLock();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') requestWakeLock();
+});
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+</script>
+</body>
+</html>

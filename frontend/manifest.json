@@ -1,0 +1,17 @@
+{
+  "name": "RoadMate AI",
+  "short_name": "RoadMate",
+  "description": "Your intelligent Hilux driving companion",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#080a10",
+  "theme_color": "#00e5ff",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%23080a10'/><text y='140' x='50%' text-anchor='middle' font-size='120' font-family='sans-serif'>🚗</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
