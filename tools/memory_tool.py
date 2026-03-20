@@ -17,14 +17,17 @@ from pathlib import Path
 # Resolve memory directory relative to this file's project root
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MEMORY_DIR = Path(os.environ.get("MEMORY_DIR", str(_PROJECT_ROOT / "memory")))
-TMP_DIR = _PROJECT_ROOT / ".tmp"
+TMP_DIR = Path(os.environ.get("TMP_DIR", str(_PROJECT_ROOT / ".tmp")))
 
 logger = logging.getLogger(__name__)
 
 
 def _ensure_dirs():
-    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
-    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+        TMP_DIR.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError) as e:
+        logger.warning(f"Cannot create memory dirs (read-only fs?): {e}")
 
 
 def _read_json(filepath: Path) -> dict:
