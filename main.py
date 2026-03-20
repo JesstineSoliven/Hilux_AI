@@ -151,7 +151,8 @@ class RoadMateAgent:
 
     def _on_wake(self):
         """Called by wake_word_tool when a wake phrase is detected."""
-        logger.info("Wake word triggered.")
+        logger.info("Wake word triggered — clearing conversation history for fresh session.")
+        memory_tool.reset_conversation_history()
         self._wake_event.set()
 
     def _wait_for_wake(self):
