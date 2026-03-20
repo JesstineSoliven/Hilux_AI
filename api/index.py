@@ -100,31 +100,39 @@ async def chat(req: ChatRequest):
     _history.append({"role": "assistant", "content": response})
     _history = _history[-MAX_HISTORY:]
 
-    spotify_url = ""
+    music_query  = ""
+    music_action = ""
     if intent == "music":
         norm = transcript.lower()
-        is_control = any(w in norm for w in [
-            "pause", "stop music", "stop the music", "resume", "unpause",
-            "continue music", "next song", "skip", "next track",
-            "previous", "last song", "go back", "what's playing",
-            "whats playing", "currently playing", "what song",
-        ])
-        if not is_control:
-            query = _extract_music_query(transcript)
-            import urllib.parse
-            spotify_url = f"https://open.spotify.com/search/{urllib.parse.quote(query)}"
+        if any(w in norm for w in ["pause", "stop music", "stop the music"]):
+            music_action = "pause"
+        elif any(w in norm for w in ["resume", "unpause", "continue music"]):
+            music_action = "resume"
+        elif any(w in norm for w in ["next song", "skip", "next track"]):
+            music_action = "next"
+        elif any(w in norm for w in ["previous", "last song", "go back"]):
+            music_action = "previous"
+        elif any(w in norm for w in ["volume up", "turn up music"]):
+            music_action = "volume_up"
+        elif any(w in norm for w in ["volume down", "turn down music"]):
+            music_action = "volume_down"
+        elif any(w in norm for w in ["what's playing", "whats playing", "currently playing", "what song"]):
+            music_action = "current"
+        else:
+            music_query = _extract_music_query(transcript)
 
-    return {"response": response, "intent": intent, "audio": audio, "spotify_url": spotify_url}
+    return {"response": response, "intent": intent, "audio": audio, "music_query": music_query, "music_action": music_action}
 
 
 @app.get("/api/status")
 async def status():
     return {
-        "status":       "online",
-        "name":         _profile.get("name", "Jess"),
-        "city":         _profile.get("default_city", "Manila"),
-        "model":        os.environ.get("CLAUDE_MODEL", "unknown"),
-        "driving_mode": driving_mode_tool.is_driving_mode_active(),
+        "status":            "online",
+        "name":              _profile.get("name", "Jess"),
+        "city":              _profile.get("default_city", "Manila"),
+        "model":             os.environ.get("CLAUDE_MODEL", "unknown"),
+        "driving_mode":      driving_mode_tool.is_driving_mode_active(),
+        "spotify_client_id": os.environ.get("SPOTIFY_CLIENT_ID", ""),
     }
 
 
@@ -141,21 +149,23 @@ def _extract_music_query(transcript: str) -> str:
 
 
 def _handle_music(transcript: str, driving: bool) -> str:
-    """Return a plain response string; spotify_url is injected at the route level."""
-    query = _extract_music_query(transcript)
-    # Control commands — no search needed
     norm = transcript.lower()
     if any(w in norm for w in ["pause", "stop music", "stop the music"]):
-        return "Pause music in the Spotify app on your device."
+        return "Pausing Spotify."
     if any(w in norm for w in ["resume", "unpause", "continue music"]):
-        return "Resume playback in the Spotify app on your device."
+        return "Resuming Spotify."
     if any(w in norm for w in ["next song", "skip", "next track"]):
-        return "Tap next in the Spotify app on your device."
+        return "Skipping to next track."
     if any(w in norm for w in ["previous", "last song", "go back"]):
-        return "Tap previous in the Spotify app on your device."
+        return "Going to previous track."
     if any(w in norm for w in ["what's playing", "whats playing", "currently playing", "what song"]):
-        return "Check the Spotify app on your device to see what's playing."
-    return f"Opening Spotify for: {query}"
+        return "Check the now playing bar."
+    if any(w in norm for w in ["volume up", "turn up music"]):
+        return "Turning volume up."
+    if any(w in norm for w in ["volume down", "turn down music"]):
+        return "Turning volume down."
+    query = _extract_music_query(transcript)
+    return f"Playing {query} on Spotify."
 
 
 def _route(intent: str, transcript: str) -> str:

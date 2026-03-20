@@ -260,6 +260,41 @@
     @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
     @keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
     .fade-in { animation: fade-in 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+
+    /* ── Spotify section ── */
+    #spotify-section { width: 100%; flex-shrink: 0; margin-bottom: 4px; }
+
+    #spotify-connect {
+      width: 100%; padding: 8px 16px; border-radius: 20px;
+      border: 1px solid rgba(30,215,96,0.4); background: rgba(30,215,96,0.07);
+      color: #1ed760; font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+      cursor: pointer; text-align: center; display: flex;
+      align-items: center; justify-content: center; gap: 6px;
+      transition: background 0.2s; -webkit-user-select: none; user-select: none;
+    }
+    #spotify-connect:hover { background: rgba(30,215,96,0.15); }
+
+    #now-playing {
+      display: none; background: var(--surface);
+      border: 1px solid rgba(30,215,96,0.2); border-radius: 14px;
+      padding: 8px 12px; align-items: center; gap: 10px;
+    }
+    #now-playing.visible { display: flex; }
+    #np-info { flex: 1; min-width: 0; }
+    #np-track  { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #np-artist { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .np-btn {
+      background: none; border: none; color: #1ed760; font-size: 20px;
+      cursor: pointer; padding: 2px 4px; line-height: 1;
+      transition: color 0.15s; flex-shrink: 0;
+    }
+    .np-btn:hover { color: #3ef880; }
+    #np-spinner {
+      width: 14px; height: 14px; flex-shrink: 0;
+      border: 2px solid rgba(30,215,96,0.2); border-top-color: #1ed760;
+      border-radius: 50%; animation: spin 0.7s linear infinite; display: none;
+    }
+    #np-spinner.visible { display: block; }
   </style>
 </head>
 <body>
@@ -310,6 +345,20 @@
 
   <div id="wake-tip">"Hey RoadMate" · "Hi Hilux" · "Assistant"</div>
 
+  <div id="spotify-section">
+    <button id="spotify-connect" onclick="spotifyLogin()">♫ Connect Spotify</button>
+    <div id="now-playing">
+      <div id="np-spinner"></div>
+      <div id="np-info">
+        <div id="np-track">Nothing playing</div>
+        <div id="np-artist"></div>
+      </div>
+      <button class="np-btn" onclick="spotifyPrev()" title="Previous">⏮</button>
+      <button class="np-btn" id="np-play-pause" onclick="spotifyToggle()" title="Play/Pause">⏸</button>
+      <button class="np-btn" onclick="spotifyNext()" title="Next">⏭</button>
+    </div>
+  </div>
+
   <div id="quick-wrap">
     <div id="quick-chips">
       <div class="chip" data-cmd="What's the weather?">Weather</div>
@@ -322,6 +371,7 @@
       <div class="chip" data-cmd="What time is it?">Time</div>
       <div class="chip" data-cmd="Nearest gas station">Nearby</div>
       <div class="chip" data-cmd="What are my reminders?">Reminders</div>
+      <div class="chip" data-cmd="Play some OPM music">Music</div>
     </div>
   </div>
 
@@ -634,8 +684,16 @@ async function sendMessage(text) {
       if (secs > 0) scheduleTimer(secs, text);
     }
 
-    if (data.spotify_url) {
-      window.open(data.spotify_url, '_blank', 'noopener');
+    if (data.intent === 'music') {
+      if (_spConnected) {
+        if (data.music_query)           spotifyPlayQuery(data.music_query);
+        else if (data.music_action === 'pause')     _spPlayer?.pause();
+        else if (data.music_action === 'resume')    _spPlayer?.resume();
+        else if (data.music_action === 'next')      _spPlayer?.nextTrack();
+        else if (data.music_action === 'previous')  _spPlayer?.previousTrack();
+        else if (data.music_action === 'volume_up') spotifyVolumeUp();
+        else if (data.music_action === 'volume_down') spotifyVolumeDown();
+      }
     }
 
     displayResponse(data.response);
@@ -706,10 +764,199 @@ function showToast(msg) {
   setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
+// ─── Spotify Web Playback SDK ─────────────────────────────────────────────────
+const SP_SCOPES = 'streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state';
+
+let _spPlayer    = null;
+let _spDeviceId  = null;
+let _spClientId  = null;
+let _spConnected = false;
+
+const elSpConnect   = document.getElementById('spotify-connect');
+const elNowPlaying  = document.getElementById('now-playing');
+const elNpTrack     = document.getElementById('np-track');
+const elNpArtist    = document.getElementById('np-artist');
+const elNpPlayPause = document.getElementById('np-play-pause');
+const elNpSpinner   = document.getElementById('np-spinner');
+
+// ─ PKCE ──────────────────────────────────────────────────────────────────────
+function _rndStr(n) {
+  const c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  return Array.from(crypto.getRandomValues(new Uint8Array(n))).map(x => c[x % c.length]).join('');
+}
+async function _makePKCE() {
+  const v = _rndStr(128);
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
+  const ch = btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  return { verifier: v, challenge: ch };
+}
+
+// ─ Token store ───────────────────────────────────────────────────────────────
+function _spSave(d) {
+  localStorage.setItem('sp_at', d.access_token);
+  if (d.refresh_token) localStorage.setItem('sp_rt', d.refresh_token);
+  localStorage.setItem('sp_ex', Date.now() + d.expires_in * 1000);
+}
+function _spToken() { return localStorage.getItem('sp_at'); }
+async function _spFreshToken() {
+  if (Date.now() < (parseInt(localStorage.getItem('sp_ex') || 0) - 60000)) return _spToken();
+  const rt = localStorage.getItem('sp_rt');
+  if (!rt || !_spClientId) return null;
+  const r = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: _spClientId, grant_type: 'refresh_token', refresh_token: rt }),
+  });
+  if (!r.ok) { _spClear(); return null; }
+  const d = await r.json(); _spSave(d); return d.access_token;
+}
+function _spClear() {
+  ['sp_at','sp_rt','sp_ex'].forEach(k => localStorage.removeItem(k));
+  _spConnected = false; _spDeviceId = null;
+  elSpConnect.style.display = 'flex';
+  elNowPlaying.classList.remove('visible');
+}
+
+// ─ Login / callback ──────────────────────────────────────────────────────────
+async function spotifyLogin() {
+  if (!_spClientId) { showToast('Spotify client ID not configured'); return; }
+  const { verifier, challenge } = await _makePKCE();
+  sessionStorage.setItem('sp_v', verifier);
+  const p = new URLSearchParams({
+    client_id: _spClientId, response_type: 'code',
+    redirect_uri: window.location.origin,
+    scope: SP_SCOPES, code_challenge_method: 'S256', code_challenge: challenge,
+  });
+  window.location.href = 'https://accounts.spotify.com/authorize?' + p;
+}
+
+async function _spCallback(code) {
+  const verifier = sessionStorage.getItem('sp_v');
+  if (!verifier) return;
+  sessionStorage.removeItem('sp_v');
+  window.history.replaceState({}, '', window.location.pathname);
+  elNpSpinner.classList.add('visible');
+  elNowPlaying.classList.add('visible');
+  const r = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: _spClientId, grant_type: 'authorization_code',
+      code, redirect_uri: window.location.origin, code_verifier: verifier,
+    }),
+  });
+  if (!r.ok) { elNpSpinner.classList.remove('visible'); elNowPlaying.classList.remove('visible'); showToast('Spotify auth failed'); return; }
+  _spSave(await r.json());
+  _spInitPlayer();
+}
+
+// ─ SDK init ───────────────────────────────────────────────────────────────────
+function _spLoadSDK() {
+  return new Promise(resolve => {
+    if (window.Spotify) { resolve(); return; }
+    window.onSpotifyWebPlaybackSDKReady = resolve;
+    const s = document.createElement('script');
+    s.src = 'https://sdk.scdn.co/spotify-player.js';
+    document.head.appendChild(s);
+  });
+}
+
+async function _spInitPlayer() {
+  const token = await _spFreshToken();
+  if (!token) { _spClear(); return; }
+  await _spLoadSDK();
+
+  _spPlayer = new Spotify.Player({
+    name: 'RoadMate AI',
+    getOAuthToken: async cb => { cb(await _spFreshToken()); },
+    volume: 0.8,
+  });
+
+  _spPlayer.addListener('ready', ({ device_id }) => {
+    _spDeviceId  = device_id;
+    _spConnected = true;
+    elSpConnect.style.display = 'none';
+    elNpSpinner.classList.remove('visible');
+    elNpTrack.textContent  = 'Connected — say "play [song]"';
+    elNpArtist.textContent = '';
+    elNowPlaying.classList.add('visible');
+  });
+
+  _spPlayer.addListener('not_ready', () => {
+    _spDeviceId = null; _spConnected = false;
+  });
+
+  _spPlayer.addListener('player_state_changed', st => {
+    if (!st) return;
+    const t = st.track_window.current_track;
+    elNpTrack.textContent    = t.name;
+    elNpArtist.textContent   = t.artists.map(a => a.name).join(', ');
+    elNpPlayPause.textContent = st.paused ? '▶' : '⏸';
+    elNowPlaying.classList.add('visible');
+  });
+
+  _spPlayer.addListener('initialization_error', ({ message }) => {
+    showToast('Player init error — needs Spotify Premium');
+    elNpSpinner.classList.remove('visible');
+    console.warn('Spotify init:', message);
+  });
+  _spPlayer.addListener('authentication_error', () => { _spClear(); });
+  _spPlayer.addListener('account_error', () => { showToast('Spotify Premium required'); _spClear(); });
+
+  _spPlayer.connect();
+}
+
+// ─ Playback controls ─────────────────────────────────────────────────────────
+function spotifyToggle() { _spPlayer?.togglePlay(); }
+function spotifyNext()   { _spPlayer?.nextTrack(); }
+function spotifyPrev()   { _spPlayer?.previousTrack(); }
+function spotifyVolumeUp()   { _spPlayer?.getVolume().then(v => _spPlayer.setVolume(Math.min(1, v + 0.2))); }
+function spotifyVolumeDown() { _spPlayer?.getVolume().then(v => _spPlayer.setVolume(Math.max(0, v - 0.2))); }
+
+async function spotifyPlayQuery(query) {
+  const token = await _spFreshToken();
+  if (!token || !_spDeviceId) return false;
+
+  const sr = await fetch(
+    `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track,playlist&limit=5`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!sr.ok) return false;
+  const results = await sr.json();
+
+  const track    = results.tracks?.items?.[0];
+  const playlist = results.playlists?.items?.[0];
+  if (!track && !playlist) return false;
+
+  const body = track
+    ? { uris: [track.uri] }
+    : { context_uri: playlist.uri };
+
+  const pr = await fetch(
+    `https://api.spotify.com/v1/me/player/play?device_id=${_spDeviceId}`,
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }
+  );
+  return pr.ok || pr.status === 204;
+}
+
+// ─ Bootstrap ─────────────────────────────────────────────────────────────────
+async function initSpotify(clientId) {
+  _spClientId = clientId;
+  if (!clientId) { elSpConnect.style.display = 'none'; return; }
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('code')) { await _spCallback(params.get('code')); return; }
+
+  if (_spToken()) { _spInitPlayer(); }
+}
+
 // ─── Status fetch ─────────────────────────────────────────────────────────────
 fetch(`${API_BASE}/api/status`).then(r => r.json()).then(d => {
   drivingMode = d.driving_mode;
   modeBadge.textContent = drivingMode ? 'DRIVING' : 'NORMAL';
+  initSpotify(d.spotify_client_id || '');
 }).catch(() => { offlineBanner.style.display = 'block'; });
 
 // ─── Wake lock ────────────────────────────────────────────────────────────────
