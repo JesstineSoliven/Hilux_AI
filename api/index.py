@@ -100,7 +100,21 @@ async def chat(req: ChatRequest):
     _history.append({"role": "assistant", "content": response})
     _history = _history[-MAX_HISTORY:]
 
-    return {"response": response, "intent": intent, "audio": audio}
+    spotify_url = ""
+    if intent == "music":
+        norm = transcript.lower()
+        is_control = any(w in norm for w in [
+            "pause", "stop music", "stop the music", "resume", "unpause",
+            "continue music", "next song", "skip", "next track",
+            "previous", "last song", "go back", "what's playing",
+            "whats playing", "currently playing", "what song",
+        ])
+        if not is_control:
+            query = _extract_music_query(transcript)
+            import urllib.parse
+            spotify_url = f"https://open.spotify.com/search/{urllib.parse.quote(query)}"
+
+    return {"response": response, "intent": intent, "audio": audio, "spotify_url": spotify_url}
 
 
 @app.get("/api/status")
@@ -112,6 +126,36 @@ async def status():
         "model":        os.environ.get("CLAUDE_MODEL", "unknown"),
         "driving_mode": driving_mode_tool.is_driving_mode_active(),
     }
+
+
+def _extract_music_query(transcript: str) -> str:
+    """Pull the search term out of a music request."""
+    norm = transcript.lower()
+    for prefix in ["play some ", "play ", "put on ", "queue "]:
+        if norm.startswith(prefix):
+            return transcript[len(prefix):].strip()
+    # Fallback: strip common control words
+    for word in ["music", "song", "track", "playlist"]:
+        norm = norm.replace(word, "").strip()
+    return norm.strip() or "music"
+
+
+def _handle_music(transcript: str, driving: bool) -> str:
+    """Return a plain response string; spotify_url is injected at the route level."""
+    query = _extract_music_query(transcript)
+    # Control commands — no search needed
+    norm = transcript.lower()
+    if any(w in norm for w in ["pause", "stop music", "stop the music"]):
+        return "Pause music in the Spotify app on your device."
+    if any(w in norm for w in ["resume", "unpause", "continue music"]):
+        return "Resume playback in the Spotify app on your device."
+    if any(w in norm for w in ["next song", "skip", "next track"]):
+        return "Tap next in the Spotify app on your device."
+    if any(w in norm for w in ["previous", "last song", "go back"]):
+        return "Tap previous in the Spotify app on your device."
+    if any(w in norm for w in ["what's playing", "whats playing", "currently playing", "what song"]):
+        return "Check the Spotify app on your device to see what's playing."
+    return f"Opening Spotify for: {query}"
 
 
 def _route(intent: str, transcript: str) -> str:
@@ -144,6 +188,9 @@ def _route(intent: str, transcript: str) -> str:
     elif intent == "reminder_get":
         reminders = reminder_tool.get_reminders("today")
         return reminder_tool.format_for_speech(reminders, driving_mode=driving)
+
+    elif intent == "music":
+        return _handle_music(transcript, driving)
 
     elif intent == "driving_mode_on":
         driving_mode_tool.enable_driving_mode()

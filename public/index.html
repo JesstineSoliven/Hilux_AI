@@ -634,6 +634,10 @@ async function sendMessage(text) {
       if (secs > 0) scheduleTimer(secs, text);
     }
 
+    if (data.spotify_url) {
+      window.open(data.spotify_url, '_blank', 'noopener');
+    }
+
     displayResponse(data.response);
     await speak(data.audio, data.response);
 
